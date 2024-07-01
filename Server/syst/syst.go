@@ -1,10 +1,7 @@
 package syst
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,25 +15,33 @@ const GB int64 = 1000 * 1000 * 1000
 const MB int64 = 1000 * 1000
 const KB int64 = 1000
 
-//Структура, в которой будут записаны название, тип и размер файлов.
+const (
+	ASC  = "asc"
+	DESC = "desc"
+)
+
+// FileInfo Структура, в которой будут записаны название, тип и размер файлов.
 type FileInfo struct {
-	Name string
-	Type string
-	Size int64
+	Name  string
+	Type  string
+	Size  string
+	Bsize int64
 }
 
 //sortBySizeAsc - принимает срез файлов для сортировки от меньшего к большему.
-func sortBySizeAsc(files []FileInfo) {
+func sortBySizeAsc(files []FileInfo) []FileInfo {
 	sort.Slice(files, func(i, j int) bool {
-		return files[i].Size < files[j].Size
+		return files[i].Bsize < files[j].Bsize
 	})
+	return files
 }
 
 //sortBySizeDesc - принимает срез файлов и элементы сортируются в порядке убывания размера.
-func sortBySizeDesc(files []FileInfo) {
+func sortBySizeDesc(files []FileInfo) []FileInfo {
 	sort.Slice(files, func(i, j int) bool {
-		return files[i].Size > files[j].Size
+		return files[i].Bsize > files[j].Bsize
 	})
+	return files
 }
 
 //walk - принимает строку root которая содержит информацию о размере каждой директории, начиная с корневой директории root.
@@ -86,28 +91,7 @@ func walk(root string) (map[string]int64, error) {
 	return directorySizes, nil
 }
 
-//HandleFileSort - обрабатывает HTTP запросы на сервере.
-func HandleFileSort(w http.ResponseWriter, r *http.Request) {
-	root := r.URL.Query().Get("root")
-	sortM := r.URL.Query().Get("sort")
-
-	data := Sort_file(root, sortM)
-
-	resp, err := json.Marshal(data)
-	if err != nil {
-		log.Printf("%v %v", r.URL, err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	w.WriteHeader(http.StatusOK)
-
-	w.Write(resp)
-}
-
-func Sort_file(rootPath string, sortOrder string) []FileInfo {
+func Sortfile(rootPath string, sortOrder string) []FileInfo {
 
 	start := time.Now()
 
@@ -145,35 +129,38 @@ func Sort_file(rootPath string, sortOrder string) []FileInfo {
 		}
 
 		File_Info = append(File_Info, FileInfo{
-			Name: filepath.Base(file),
-			Type: fileType,
-			Size: fileSize,
+			Name:  filepath.Base(file),
+			Type:  fileType,
+			Bsize: fileSize,
 		})
 	}
-	if sortOrder == "" {
-		sortBySizeAsc(File_Info)
-		fmt.Println("Способ сортировки не был выбран - выполняется сортировка по умолчанию (asc)")
 
-	} else if sortOrder == "asc" {
-		sortBySizeAsc(File_Info)
-	} else if sortOrder == "desc" {
-		sortBySizeDesc(File_Info)
+	switch sortOrder {
+	case "":
+		File_Info = sortBySizeAsc(File_Info)
+		fmt.Println("Способ сортировки не был выбран - выполняется сортировка по умолчанию (asc)")
+		break
+	case ASC:
+		File_Info = sortBySizeAsc(File_Info)
+		break
+	case DESC:
+		File_Info = sortBySizeDesc(File_Info)
+		break
 	}
-	for _, fileInfo := range File_Info {
+
+	for i := 0; i < len(File_Info); i++ {
 		var sizeStr string
 		switch {
-		case fileInfo.Size >= GB:
-			sizeStr = fmt.Sprintf("%.2f GB", float64(fileInfo.Size)/(thousand*thousand*thousand))
-		case fileInfo.Size >= MB:
-			sizeStr = fmt.Sprintf("%.2f MB", float64(fileInfo.Size)/(thousand*thousand))
-		case fileInfo.Size >= KB:
-			sizeStr = fmt.Sprintf("%.2f KB", float64(fileInfo.Size)/thousand)
+		case File_Info[i].Bsize >= GB:
+			sizeStr = fmt.Sprintf("%.2f GB", float64(File_Info[i].Bsize)/(thousand*thousand*thousand))
+		case File_Info[i].Bsize >= MB:
+			sizeStr = fmt.Sprintf("%.2f MB", float64(File_Info[i].Bsize)/(thousand*thousand))
+		case File_Info[i].Bsize >= KB:
+			sizeStr = fmt.Sprintf("%.2f KB", float64(File_Info[i].Bsize)/thousand)
 		default:
-			sizeStr = fmt.Sprintf("%d bytes", fileInfo.Size)
+			sizeStr = fmt.Sprintf("%.2f  bytes", float64(File_Info[i].Bsize))
 		}
-
-		output := fmt.Sprintf("Name: %s, Type: %s, Size: %s", fileInfo.Name, fileInfo.Type, sizeStr)
-		fmt.Println(output)
+		File_Info[i].Size = sizeStr
 	}
 
 	elapsed := time.Since(start)
