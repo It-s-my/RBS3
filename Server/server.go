@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const shutdownTimeout = 3 * time.Second
+
 // Config структура для хранения порта
 type Config struct {
 	Port int `json:"port"`
@@ -49,13 +51,11 @@ func HandleFileSort(w http.ResponseWriter, r *http.Request) {
 	w.Write(resp)
 }
 
-// main - точка входа в программу
-func main() {
+func RunServer(ctx context.Context) error {
 	// Читаем конфигурацию из файла
 	file, err := os.Open("config/config.json")
 	if err != nil {
 		fmt.Println("Ошибка открытия файла", err)
-		return
 	}
 	defer file.Close()
 
@@ -65,7 +65,6 @@ func main() {
 	err = json.NewDecoder(file).Decode(&config)
 	if err != nil {
 		fmt.Println("Ошибка декодирования данных:", err)
-		return
 	}
 	// Создаем HTTP сервер с настройками из конфигурации
 	server := &http.Server{
@@ -79,22 +78,32 @@ func main() {
 			log.Fatalf("Не удалось запустить сервер на порту %d: %v\n", config.Port, err)
 		}
 	}()
-	// Создаем канал stop для получения сигналов остановки сервера
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	// Ждем сигнала остановки
-	<-stop
-
+	<-ctx.Done()
 	fmt.Println("\nОстанавливаю сервер...")
 
-	// Создаем контекст с таймаутом для остановки сервера
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	// Останавливаем сервер с учетом контекста
-	if err := server.Shutdown(ctx); err != nil {
-		fmt.Println("Ошибка остановки сервера:", err)
+	ctxShutdown, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	err = server.Shutdown(ctxShutdown)
+	if err != nil {
+		return fmt.Errorf("shutdown: %v", err)
 	}
 
 	fmt.Println("Сервер остановлен корректно.")
+
+	return err
+}
+
+// main - точка входа в программу
+func main() {
+	// Добавляем сигналы syscall.SIGINT и syscall.SIGTERM к контексту
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	err := RunServer(ctx)
+	if err != nil {
+		fmt.Errorf("Ошибка запуска сервера: %v")
+		return
+	}
 }
