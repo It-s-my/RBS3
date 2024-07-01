@@ -25,9 +25,13 @@ func HandleFileSort(w http.ResponseWriter, r *http.Request) {
 	root := r.URL.Query().Get("root")
 	sortM := r.URL.Query().Get("sort")
 
-	// Вызываем функцию Sortfile из пакета syst для сортировки файлов
-	data := syst.Sortfile(root, sortM)
-
+	// Вызываем функцию GetFailesList из пакета syst для сортировки файлов
+	data, err := syst.GetFailesList(root, sortM)
+	if err != nil {
+		log.Printf("%v %v", r.URL, err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	// Преобразуем данные в формат JSON
 	resp, err := json.Marshal(data)
 	// Если произошла ошибка при маршалинге данных, логируем ошибку и отправляем HTTP ошибку
@@ -72,8 +76,7 @@ func main() {
 	go func() {
 		fmt.Println("Пытаюсь запустить сервер на порту", config.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("Не удалось запустить сервер на порту %d: %v\n", config.Port, err)
-			return
+			log.Fatalf("Не удалось запустить сервер на порту %d: %v\n", config.Port, err)
 		}
 	}()
 	// Создаем канал stop для получения сигналов остановки сервера

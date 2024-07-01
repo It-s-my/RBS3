@@ -96,8 +96,8 @@ func walk(root string) (map[string]int64, error) {
 	return directorySizes, nil
 }
 
-// Sortfile принимает путь и тип сортировки, возвращая FileInfo, в котором содержится вся информация о директории.
-func Sortfile(rootPath string, sortOrder string) []FileInfo {
+// GetFailesList принимает путь и тип сортировки, возвращая FileInfo, в котором содержится вся информация о директории.
+func GetFailesList(rootPath string, sortOrder string) ([]FileInfo, error) {
 	//Запуск таймера выполнения программы
 	start := time.Now()
 
@@ -116,7 +116,7 @@ func Sortfile(rootPath string, sortOrder string) []FileInfo {
 	directories, walkErr := walk(rootPath)
 	if walkErr != nil {
 		fmt.Println("Ошибка при обходе файловой системы:", walkErr)
-		os.Exit(1)
+		return nil, walkErr
 	}
 
 	//Происходит чтение информации о файлах
@@ -179,5 +179,5 @@ func Sortfile(rootPath string, sortOrder string) []FileInfo {
 	//Остановка таймера
 	elapsed := time.Since(start)
 	fmt.Printf("Время выполнения программы: %s\n", elapsed)
-	return FilesInfo
+	return FilesInfo, nil
 }
